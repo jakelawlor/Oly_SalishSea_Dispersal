@@ -1,0 +1,10 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+data_raw/SSM2014/
+data_raw/SSM2095/
+data_processed/WA_currents_14.Rdata
+data_processed/WA_currents_95.Rdata
+data_processed/zeta_14.Rdata
+data_processed/zeta_95.Rdata
