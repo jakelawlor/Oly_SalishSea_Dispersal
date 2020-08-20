@@ -39,6 +39,7 @@ load(here("data_processed","siglay.Rdata"))
 growthgam_final <- readRDS(here("data_raw","growthgam_finalRDS.rds"))
 load(here("data_raw","growfunction.Rdata"))
 load(here("data_processed","time.Rdata"))
+#-----
 
 
 
@@ -51,7 +52,7 @@ load(here("data_processed","time.Rdata"))
 create.larvae <- function(name=get('name',envir = globalenv()),nodes=get('nodes',envir = globalenv()),year=get('year',envir = globalenv()),release=get('release',envir = globalenv())){
   
   # create node points spatial reference
-  nodepoints <- SpatialPoints(WA_nodes_coords[,2:3])
+  nodepoints <<- SpatialPoints(WA_nodes_coords[,2:3])
 
   # create empty array starting on release day 
   #      3 dimensions - larvae (19), columns (X,Y,Z, closest node, optional closest node 2&3, pages for model hours)
@@ -64,7 +65,7 @@ create.larvae <- function(name=get('name',envir = globalenv()),nodes=get('nodes'
   temporary[,1,release] <- restorationsites$x    # X coords
   temporary[,2,release] <- restorationsites$y    # Y coords
   temporary[,3:(3+nodes-1),release] <- t(apply(gDistance(nodepoints,SpatialPoints(temporary[,1:2,release]),byid = TRUE),1,order)[1:nodes,]) # closest nodes 1-3
-  temporary[,(4+nodes-1),release] <- -(WA_nodes_coords$h_smooth[temporary[,3,release]] #+ get(paste0("zeta_",year))[temporary[,3,release], release ] 
+  temporary[,(4+nodes-1),release] <- -(WA_nodes_coords$h_true[temporary[,3,release]] #+ get(paste0("zeta_",year))[temporary[,3,release], release ] 
                                        ) *.75  # this releases larvae at .75 the depth at which they were released including tidal height. 
   #temporary[,,1]  # this creates first page of array with larva coordinates that I picked at sites. 
   
@@ -84,7 +85,7 @@ create.larvae <- function(name=get('name',envir = globalenv()),nodes=get('nodes'
 # Function 2. Locate Larvae
 #-------------------------------------
 # this function makes each larva find the closest nodes to it
-loop_array <<- get(paste0("larvatrack",name))[,,hour:(hour+1)] 
+#loop_array <<- get(paste0("larvatrack",name))[,,hour:(hour+1)] 
 
 locate.larvae <- function(loop_array = get('loop_array',envir=globalenv()), nodes=get('nodes',envir = globalenv()),year=get('year',envir = globalenv())){
   
@@ -133,6 +134,7 @@ grow.larvae <- function(year= get('year',envir=globalenv())) {
   growth<-  predict(growthgam_final,
                     list(Temp=get(paste0("WA_currents_",year))[cbind(lastnodes,1,closestlay,hour)],
                          Sal=get(paste0("WA_currents_",year))[cbind(lastnodes,2,closestlay,hour)])) / 24 # function output is um/day, but we want um/hour
+  
   growth[growth<0] <- 0 # some temps are too cold so GRs are coming out negative. Change these to 0. 
   return(growth)
   
@@ -212,7 +214,7 @@ swim.larvae <- function(array = get("loop_array",envir=globalenv()), behavior = 
   if (behavior=="none") {
     
     # do nothing. Don't really need this line, but I like to see it. 
-    loop_array[,4,2] <<- loop_array[,4,2]
+    loop_array[,3+nodes,2] <<- loop_array[,3+nodes,2]
     
   }
   #-----
@@ -227,12 +229,12 @@ swim.larvae <- function(array = get("loop_array",envir=globalenv()), behavior = 
     if(time[hour] == "N"){
       
       # swim downwards
-      loop_array[,4,2] <<- loop_array[,4,2] - (.0012*3600) 
+      loop_array[,3+nodes,2] <<- loop_array[,3+nodes,2] - (.0012*3600) 
       
     } else { # otherwise, if day time,
       
       # swim upwards
-      loop_array[,4,2] <<- loop_array[,4,2] + (.0012*3600)
+      loop_array[,3+nodes,2] <<- loop_array[,3+nodes,2] + (.0012*3600)
     }
     
     
@@ -247,12 +249,12 @@ swim.larvae <- function(array = get("loop_array",envir=globalenv()), behavior = 
   if (behavior=="onto") {
   
     # small larvae swim up
-    loop_array[,4,2][ get(paste(paste0("larvatrack",name,".sizes")))[,hour]  < 220 ] <<- 
-      loop_array[,4,2][ get(paste(paste0("larvatrack",name,".sizes")))[,hour]  < 220 ] + (.0012*3600) # add up swim 
+    loop_array[,3+nodes,2][ get(paste(paste0("larvatrack",name,".sizes")))[,hour]  < 220 ] <<- 
+      loop_array[,3+nodes,2][ get(paste(paste0("larvatrack",name,".sizes")))[,hour]  < 220 ] + (.0012*3600) # add up swim 
     
     # big larvae swim down
-    loop_array[,4,2][ get(paste(paste0("larvatrack",name,".sizes")))[,hour]  > 260 ] <<- 
-      loop_array[,4,2][ get(paste(paste0("larvatrack",name,".sizes")))[,hour]  > 260 ] + (.0012*3600) # add up swim 
+    loop_array[,3+nodes,2][ get(paste(paste0("larvatrack",name,".sizes")))[,hour]  > 260 ] <<- 
+      loop_array[,3+nodes,2][ get(paste(paste0("larvatrack",name,".sizes")))[,hour]  > 260 ] - (.0012*3600) # add up swim 
 
   }
   #-----
@@ -277,7 +279,7 @@ correct.larvae <- function(array = get("loop_array",envir=globalenv()), year=get
   # then snap larvae back to their closest. This is meant to keep larvae from traveling onto land. 
 
   # find new closest nodes
-  loop_array[,3:(3+nodes-1),2] <<- t(apply(gDistance(nodepoints,SpatialPoints(loop_array[,1:2,release]),byid = TRUE),1,order)[1:nodes,]) # closest nodes 1-3
+  loop_array[,3:(3+nodes-1),2] <<- t(apply(gDistance(nodepoints,SpatialPoints(loop_array[,1:2,2]),byid = TRUE),1,order)[1:nodes,]) # closest nodes 1-3
   
  # loop_array[,3,2] <<- apply(gDistance(nodepoints,SpatialPoints(loop_array[,1:2,2]),byid=TRUE),1,which.min) # find new closest node
 
@@ -297,32 +299,57 @@ correct.larvae <- function(array = get("loop_array",envir=globalenv()), year=get
   # Manually correct land jumps
   #-----------------------------
   # correct larvae that jump from fidalgo bay West onto Fidalgo Island - fix X
-  loop_array[,1,2][loop_array[,1,1] >= 529902  & loop_array[,1,2] < 529902  &
-                     loop_array[,2,1] >= 5368432 &  loop_array[,2,1] < 5373264] <<- 529902
+  loop_array[,1,2][loop_array[,1,1] >= 529800  & loop_array[,1,2] < 529800  &
+                     loop_array[,2,1] >= 5367000 &  loop_array[,2,1] < 5372000] <<- 529902
 
   # correct larvae that jump from fidalgo bay East onto Fidalgo Island - fix X
-  loop_array[,1,2][loop_array[,2,1] > 5367200  & loop_array[,2,1] < 5371500  & loop_array[,1,1] <= 532000 &
-                     loop_array[,1,2] >= 532000] <<- 532300
+  loop_array[,1,2][loop_array[,2,1] > 5367000  & loop_array[,2,1] < 5371500  & loop_array[,1,1] <= 531800 &
+                     loop_array[,1,2] >= 531800] <<- 531760
+  
+  # correct larvae that jump from padilla bay East to Fidalgo bay - fix X
+  loop_array[,1,2][loop_array[,2,1] > 5371000  & loop_array[,2,1] < 5373000  & loop_array[,1,1] >= 532400 &
+                     loop_array[,1,2] <= 532400] <<- 532500
+  
+  # correct larvae that go on land between fidalgo and padilla from north fix Y 
+  loop_array[,2,2][loop_array[,1,1] > 531540  & loop_array[,1,1] < 532500  & loop_array[,1,1] >= 5372800 &
+                     loop_array[,1,2] < 5372800] <<- 5372890
+  
+  # correct larvae that jump from padilla bay East to Fidalgo bay - fix X lower
+  loop_array[,1,2][loop_array[,2,1] < 5371000  & loop_array[,2,1] > 5368000  & loop_array[,1,1] >= 533250 &
+                     loop_array[,1,2] < 533250] <<- 533500
   
   
   # keep larvae from jumping fidalgo bay into similk bay - fix Y back to fidalgo bay
-  loop_array[,2,2][ loop_array[,1,1] > 529641  & loop_array[,1,1] < 531760  & loop_array[,2,1] > 5367800 &
-                      loop_array[,2,2] <= 5367800] <<- 5368000
+  loop_array[,2,2][ loop_array[,1,1] > 529000  & loop_array[,1,1] < 532200  & loop_array[,2,1] >= 5368200 &
+                      loop_array[,2,2] < 5368200] <<- 5368300
   
 
-  # keep larvae from jumping from similk bay into fidalgo bay - fix Y back to fidalgo bay
-  loop_array[,2,2][ loop_array[,1,1] > 530600  & loop_array[,1,1] < 533200  & loop_array[,2,1] < 5366300 &
-                      loop_array[,2,2] > 5366300] <<- 5366000
+  # keep larvae from jumping from similk bay into fidalgo bay - fix Y back to similk bay
+  loop_array[,2,2][ loop_array[,1,1] > 529500  & loop_array[,1,1] < 533200  & loop_array[,2,1] <= 5365900 &
+                      loop_array[,2,2] > 5365900] <<- 5365900
   
   # keep larvae from crossing out of Kilisut Harbor - fix Y
-  loop_array[,2,2][ loop_array[,1,1] > 521200  & loop_array[,1,1] < 523000  & loop_array[,2,1] > 5318800 &
-                      loop_array[,2,2] < 5318800] <<- 5319300
+  loop_array[,2,2][ loop_array[,1,1] > 521100  & loop_array[,1,1] < 523700  & loop_array[,2,1] >= 5319000 &
+                      loop_array[,2,2] < 5319000] <<- 5319000
   
+  # keep larvae from crossing out of Kilisut Harbor right - fix X
+  loop_array[,1,2][ loop_array[,2,1] > 5318000  & loop_array[,2,1] < 5321500  & loop_array[,1,1] <= 523054 &
+                      loop_array[,1,2] > 523054] <<- 523054
   
+  # keep larvae from jumping over whidbey island to Mutiny bay - fix Y back to whidbey
+  loop_array[,2,2][ loop_array[,1,1] > 533000  & loop_array[,1,1] < 537900  & loop_array[,2,1] >= 5318000 &
+                      loop_array[,2,2] < 5318000] <<- 5318100
   
+  # keep larvae from jumping over whidbey island to Penn Cove - fix Y back to strait
+  loop_array[,2,2][ loop_array[,1,1] > 519000  & loop_array[,1,1] < 526500  & loop_array[,2,1] <= 5338300 &
+                      loop_array[,2,2] > 5338300] <<- 5338300
+  
+  # keep larvae from jumping over whidbey island to Penn Cove - fix Y back to Penn Cove
+  #loop_array[,2,2][ loop_array[,1,1] > 519000  & loop_array[,1,1] < 522000  & loop_array[,2,1] <= 5338300 &
+  #                    loop_array[,2,2] > 5338300] <<- 5338300
   
   # find new closest node
-  loop_array[,3:(3+nodes-1),release] <<- t(apply(gDistance(nodepoints,SpatialPoints(loop_array[,1:2,release]),byid = TRUE),1,order)[1:nodes,]) # closest nodes 1-3
+  loop_array[,3:(3+nodes-1),2] <<- t(apply(gDistance(nodepoints,SpatialPoints(loop_array[,1:2,2]),byid = TRUE),1,order)[1:nodes,]) # closest nodes 1-3
   
   #loop_array[,3,2] <<- apply(gDistance(nodepoints,SpatialPoints(loop_array[,1:2,2]),byid=TRUE),1,which.min) # find new closest node
   
@@ -333,8 +360,8 @@ correct.larvae <- function(array = get("loop_array",envir=globalenv()), year=get
   loop_array[,3+nodes,2] [loop_array[,3+nodes,2] >  get(paste0("zeta_",year))[lastnodes,hour] ] <<-  # find larvae > tidal height
     get(paste0("zeta_",year))[lastnodes,hour] [loop_array[,3+nodes,2] >  get(paste0("zeta_",year))[lastnodes,hour] ] # make depth position tidal height
   # find larvae below bottom, and limit to bottom
-  loop_array[,3+nodes,2] [ loop_array[,3+nodes,2] < (-WA_nodes_coords[lastnodes,4]) ] <<-
-    (-WA_nodes_coords[lastnodes,5]) [ loop_array[,3+nodes,2] < (-WA_nodes_coords[lastnodes,4]) ]
+  loop_array[,3+nodes,2] [ loop_array[,3+nodes,2] < (-WA_nodes_coords[lastnodes,5]) ] <<-
+    (-WA_nodes_coords[lastnodes,5]) [ loop_array[,3+nodes,2] < (-WA_nodes_coords[lastnodes,5]) ]
   #----
   
 
